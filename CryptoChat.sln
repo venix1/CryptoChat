@@ -1,0 +1,64 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.0.0
+MinimumVisualStudioVersion = 16.0.0.0
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CryptoChat.Server", "Server\CryptoChat.Server.csproj", "{72455F6B-C689-41F8-8B36-A8ADE4887136}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CryptoChat.Client", "Client\CryptoChat.Client.csproj", "{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CryptoChat.Shared", "Shared\CryptoChat.Shared.csproj", "{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Debug|x64.Build.0 = Debug|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Debug|x86.Build.0 = Debug|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Release|x64.ActiveCfg = Release|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Release|x64.Build.0 = Release|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Release|x86.ActiveCfg = Release|Any CPU
+		{3CC1EDEF-3F4B-42EF-9809-B716B1B7A16B}.Release|x86.Build.0 = Release|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Debug|x64.Build.0 = Debug|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Debug|x86.Build.0 = Debug|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Release|x64.ActiveCfg = Release|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Release|x64.Build.0 = Release|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Release|x86.ActiveCfg = Release|Any CPU
+		{72455F6B-C689-41F8-8B36-A8ADE4887136}.Release|x86.Build.0 = Release|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Debug|x64.Build.0 = Debug|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Debug|x86.Build.0 = Debug|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Release|Any CPU.Build.0 = Release|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Release|x64.ActiveCfg = Release|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Release|x64.Build.0 = Release|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Release|x86.ActiveCfg = Release|Any CPU
+		{93E8A0FC-6CB5-42DA-A527-5B9AD6455180}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1A126565-B13C-4A5E-A46A-75B15A4DD548}
+	EndGlobalSection
+EndGlobal
