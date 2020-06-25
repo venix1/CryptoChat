@@ -1,0 +1,162 @@
+﻿@page "/"
+@page "/chat"
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Security.Cryptography
+@using CryptoChat.Shared;
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<div class="form-group">
+    <label>
+        User:
+        <input @bind="userInput" />
+    </label>
+</div>
+<div class="form-group">
+    <label>
+        Group:
+        <input @bind="groupInput" />
+    </label>
+</div>
+<div class="form-group">
+    <label>
+        Password:
+        <input @bind="passwordInput" />
+    </label>
+</div>
+<button @onclick="Connect" disabled="@(!IsConnected)">Connect</button>
+<div class="form-group">
+    <label>
+        Message:
+        <input @bind="messageInput" />
+    </label>
+</div>
+<button @onclick="Send" disabled="@(!HasGroup)">Send</button>
+
+<hr>
+
+<ul id="messagesList">
+    @foreach (var message in messages)
+    {
+        <li>@message</li>
+    }
+</ul>
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private string userInput;
+    private string groupInput;
+    private string passwordInput;
+    private string messageInput;
+    private Guid channelId;
+
+    private MegolmGroup group;
+
+
+    protected byte[] Desalinate(byte[] salt, byte[] data)
+    {
+        byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
+        byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
+        return MegolmGroup.AesCrypt(ikm, salt, info, false, data);
+    }
+    protected byte[] Salinate(byte[] salt, byte[] data)
+    {
+        byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
+        byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
+        return MegolmGroup.AesCrypt(ikm, salt, info, true, data);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Hub shoud CryptedTransport(Generated ECDH)
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri($"/chathub"))
+            .Build();
+
+        hubConnection.On<byte[], byte[]>("ReceiveSession", async (salt, data) =>
+        {
+            try
+            {
+
+                bool newPeer = group.AddPeer(Desalinate(salt, data));
+                Console.WriteLine($"AddPeer: {newPeer}");
+                if (newPeer)
+                {
+                    salt = MegolmGroup.GetRandomBytes(32);
+
+                    await hubConnection.SendAsync("SendSession", channelId, salt, Salinate(salt, group.Session.Serialize()));
+                }
+                Console.WriteLine("Done");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        });
+
+        hubConnection.On<byte[], byte[]>("ReceiveMessage", (k, message) =>
+        {
+            try
+            {
+                Console.WriteLine("ReceiveMessage");
+                var msg = System.Text.Encoding.UTF8.GetString(group.Decrypt(k, message));
+
+                Console.WriteLine(msg);
+                var encodedMsg = $"{group.GetPeerName(k)}: {msg}";
+                messages.Add(encodedMsg);
+                StateHasChanged();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    Task Connect()
+    {
+        byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
+
+        byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
+
+        // Calculate Channel as Guid. No salt.
+        channelId = new Guid(MegolmGroup.HKDF(ikm, 16, null, info));
+
+        // TODO: Session must be encrypted, using password only.
+        // AES - HKDF(password, AES + IV, channel, "Password');
+        group = new MegolmGroup();
+        group.Session.Name = userInput;
+
+        // Message Encryption. With salt
+
+
+        byte[] salt = MegolmGroup.GetRandomBytes(32);
+        var msg = MegolmGroup.AesCrypt(ikm, salt, info, true, group.Session.Serialize());
+
+        return hubConnection.SendAsync("JoinGroup", channelId, salt, msg);
+
+        // TODO: How to separate this call?
+        // return await hubConnection.SendAsync("SendSession", channelId, group.Session.Serialize());
+
+        // await hubConnection.SendAsync("SetNick", channelId, userInput);
+    }
+
+    Task Send()
+    {
+        Console.WriteLine("SendMessage");
+        return hubConnection.SendAsync("SendMessage", channelId, group.Session.Key.PublicKeyRaw, group.Encrypt(System.Text.Encoding.UTF8.GetBytes(messageInput)));
+    }
+
+    public bool IsConnected =>
+        hubConnection.State == HubConnectionState.Connected;
+    public bool HasGroup =>
+        group != null;
+
+    public void Dispose()
+    {
+        _ = hubConnection.DisposeAsync();
+    }
+}
