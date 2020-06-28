@@ -25,6 +25,7 @@
     </label>
 </div>
 <button @onclick="Connect" disabled="@(!IsConnected)">Connect</button>
+<button @onclick="Verify" disabled="@(!HasGroup)">Verify</button>
 <div class="form-group">
     <label>
         Message:
@@ -34,6 +35,13 @@
 <button @onclick="Send" disabled="@(!HasGroup)">Send</button>
 
 <hr>
+
+<ul id="userList">
+    @foreach (var peer in group.PeerList)
+    {
+        <li>@peer.Name</li>
+    }
+</ul>
 
 <ul id="messagesList">
     @foreach (var message in messages)
@@ -54,51 +62,44 @@
     private MegolmGroup group;
 
 
-    protected byte[] Desalinate(byte[] salt, byte[] data)
-    {
+    protected byte[] Desalinate(byte[] salt, byte[] data) {
         byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
         byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
         return MegolmGroup.AesCrypt(ikm, salt, info, false, data);
     }
-    protected byte[] Salinate(byte[] salt, byte[] data)
-    {
+    protected byte[] Salinate(byte[] salt, byte[] data) {
         byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
         byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
         return MegolmGroup.AesCrypt(ikm, salt, info, true, data);
     }
 
-    protected override async Task OnInitializedAsync()
-    {
+    protected override async Task OnInitializedAsync() {
+        group = new MegolmGroup();
         // TODO: Hub shoud CryptedTransport(Generated ECDH)
         hubConnection = new HubConnectionBuilder()
             .WithUrl(NavigationManager.ToAbsoluteUri($"/chathub"))
             .Build();
 
-        hubConnection.On<byte[], byte[]>("ReceiveSession", async (salt, data) =>
-        {
-            try
-            {
+        hubConnection.On<byte[], byte[]>("ReceiveSession", async (salt, data) => {
+            try {
 
                 bool newPeer = group.AddPeer(Desalinate(salt, data));
                 Console.WriteLine($"AddPeer: {newPeer}");
-                if (newPeer)
-                {
+                if (newPeer) {
                     salt = MegolmGroup.GetRandomBytes(32);
 
                     await hubConnection.SendAsync("SendSession", channelId, salt, Salinate(salt, group.Session.Serialize()));
+                    StateHasChanged();
                 }
                 Console.WriteLine("Done");
             }
-            catch (Exception e)
-            {
+            catch (Exception e) {
                 Console.WriteLine(e);
             }
         });
 
-        hubConnection.On<byte[], byte[]>("ReceiveMessage", (k, message) =>
-        {
-            try
-            {
+        hubConnection.On<byte[], byte[]>("ReceiveMessage", (k, message) => {
+            try {
                 Console.WriteLine("ReceiveMessage");
                 var msg = System.Text.Encoding.UTF8.GetString(group.Decrypt(k, message));
 
@@ -107,8 +108,7 @@
                 messages.Add(encodedMsg);
                 StateHasChanged();
             }
-            catch (Exception e)
-            {
+            catch (Exception e) {
                 Console.WriteLine(e);
             }
         });
@@ -116,8 +116,23 @@
         await hubConnection.StartAsync();
     }
 
-    Task Connect()
-    {
+    Task Verify() {
+        // Level 1 TLS is HTTPS.  This can be considered passively transparent.
+        // Level 2 is TLS for SignalR.  This is actively transparent.
+        // Level 3 is PSK.  This is secure unless a malicious party has stolen.
+
+        // Level 2 TLS provides a fingerprint for Client/Server comms.  However,
+        // an active attacker can manipulate this as client/server have no PSK.
+        // Therefore, independent check over ToR or VPN will verify.
+
+        // Do nothing right now. 
+        // TODO: This should generate a URL, which when accessed through another
+        // source, will help verify the Finger for second level TLS.
+        // Recommeded via TOR or VPN.
+
+        return Task.FromResult(0);
+    }
+    async Task Connect() {
         byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
 
         byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
@@ -127,7 +142,6 @@
 
         // TODO: Session must be encrypted, using password only.
         // AES - HKDF(password, AES + IV, channel, "Password');
-        group = new MegolmGroup();
         group.Session.Name = userInput;
 
         // Message Encryption. With salt
@@ -136,18 +150,18 @@
         byte[] salt = MegolmGroup.GetRandomBytes(32);
         var msg = MegolmGroup.AesCrypt(ikm, salt, info, true, group.Session.Serialize());
 
-        return hubConnection.SendAsync("JoinGroup", channelId, salt, msg);
-
-        // TODO: How to separate this call?
-        // return await hubConnection.SendAsync("SendSession", channelId, group.Session.Serialize());
-
-        // await hubConnection.SendAsync("SetNick", channelId, userInput);
+        await hubConnection.SendAsync("JoinGroup", channelId);
+        await hubConnection.SendAsync("SendSession", channelId, salt, Salinate(salt, group.Session.Serialize()));
+        // await hubConnection.SendAsync("SetNick", channelId, salt, Salinate(salt, group.Session.Serialize()));
     }
 
-    Task Send()
-    {
+    Task Send() {
         Console.WriteLine("SendMessage");
-        return hubConnection.SendAsync("SendMessage", channelId, group.Session.Key.PublicKeyRaw, group.Encrypt(System.Text.Encoding.UTF8.GetBytes(messageInput)));
+        var cipherText = group.Encrypt(System.Text.Encoding.UTF8.GetBytes(messageInput));
+        messageInput = null;
+        StateHasChanged();
+        // SendMegaolm
+        return hubConnection.SendAsync("SendMessage", channelId, group.Session.Key.PublicKeyRaw, cipherText);
     }
 
     public bool IsConnected =>
@@ -155,8 +169,7 @@
     public bool HasGroup =>
         group != null;
 
-    public void Dispose()
-    {
+    public void Dispose() {
         _ = hubConnection.DisposeAsync();
     }
 }
