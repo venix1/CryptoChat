@@ -10,12 +10,9 @@ namespace CryptoChat.Server.Hubs
     {
 
 
-        public async Task JoinGroup(Guid group, byte[] salt, byte[] session) {
+        public async Task JoinGroup(Guid group) {
             Console.WriteLine($"JoinGroup: {group.ToString()}");
             await Groups.AddToGroupAsync(Context.ConnectionId, group.ToString());
-            
-            // TODO: This shouldn't be done
-            await Clients.OthersInGroup(group.ToString()).SendAsync("ReceiveSession", salt, session);
         }
 
         public async Task SendSession(Guid group, byte[] salt, byte[] session) {

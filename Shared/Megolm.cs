@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Org.BouncyCastle.Crypto;
@@ -371,6 +372,7 @@ namespace CryptoChat.Shared
     {
         public MegolmSession Session { get; set; }
         Dictionary<string, MegolmSession> Peers { get; set; }
+        public List<MegolmSession> PeerList => Peers.Values.ToList();
 
         public readonly byte[] Info = System.Text.Encoding.UTF8.GetBytes("MEGOLM_KEYS");
 
