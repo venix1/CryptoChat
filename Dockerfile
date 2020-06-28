@@ -12,4 +12,4 @@ WORKDIR /app
 COPY --from=build-env /app/out .
 COPY entrypoint.sh .
 EXPOSE 80
-CMD ["/bin/sh", "entrypoint.sh"]
+CMD ["/bin/sh", "/app/entrypoint.sh"]
