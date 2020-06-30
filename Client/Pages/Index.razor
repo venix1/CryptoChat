@@ -3,9 +3,14 @@
 @using Microsoft.AspNetCore.SignalR.Client
 @using System.Security.Cryptography
 @using CryptoChat.Shared;
+@using System.Linq;
+@inject IJSRuntime jsRuntime
 @inject NavigationManager NavigationManager
 @implements IDisposable
 
+@* TODO: Figure out how to split this into multiple components *@
+
+@if (!HasGroup) { 
 <div class="form-group">
     <label>
         User:
@@ -26,30 +31,38 @@
 </div>
 <button @onclick="Connect" disabled="@(!IsConnected)">Connect</button>
 <button @onclick="Verify" disabled="@(!HasGroup)">Verify</button>
-<div class="form-group">
-    <label>
-        Message:
-        <input @bind="messageInput" />
-    </label>
+}
+else {
+<div class="chat-app container" >
+    <div id="chatbox" class="chatbox row">
+        <div id="conversation" class="conversation col-9 card">
+            @foreach (var message in messages) {
+                <div class="message">@message</div>
+            }
+            <div id="anchor"></div>
+        </div>
+        <div id="members" class = "members card col">
+            <div>Party Size: ???</div>
+            <b>Active:</b>
+            <div id="activeMembers">
+            @foreach (var peer in group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds <= 90)) {
+                <div class="member d-flex justify-content-end" data-toggle="tooltip" data-placement="top" title="Last Active: @peer.LastActive" >@peer.Name</div>
+            }</div>
+            <b>Inactive:</b>
+            <div id="inactiveMembers">
+            @foreach (var peer in group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds > 90)) {
+                <div class="member d-flex justify-content-end" data-toggle="tooltip" data-placement="top" title="Last Active: @peer.LastActive" >@peer.Name</div>
+            }
+            </div>
+        </div>
+    </div>
+    <div class="row">
+    <div class="messageBox col card">
+        <span><input placeholder="Your message..." @bind="messageInput" @onkeyup="Send" /></span>
+    </div>
+    </div>
 </div>
-<button @onclick="Send" disabled="@(!HasGroup)">Send</button>
-
-<hr>
-
-<ul id="userList">
-    @foreach (var peer in group.PeerList)
-    {
-        <li>@peer.Name</li>
-    }
-</ul>
-
-<ul id="messagesList">
-    @foreach (var message in messages)
-    {
-        <li>@message</li>
-    }
-</ul>
-
+}
 @code {
     private HubConnection hubConnection;
     private List<string> messages = new List<string>();
@@ -60,7 +73,6 @@
     private Guid channelId;
 
     private MegolmGroup group;
-
 
     protected byte[] Desalinate(byte[] salt, byte[] data) {
         byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
@@ -74,7 +86,6 @@
     }
 
     protected override async Task OnInitializedAsync() {
-        group = new MegolmGroup();
         // TODO: Hub shoud CryptedTransport(Generated ECDH)
         hubConnection = new HubConnectionBuilder()
             .WithUrl(NavigationManager.ToAbsoluteUri($"/chathub"))
@@ -98,14 +109,13 @@
             }
         });
 
-        hubConnection.On<byte[], byte[]>("ReceiveMessage", (k, message) => {
+        hubConnection.On<byte[], byte[]>("ReceiveMeta", async (k, message) => {
             try {
-                Console.WriteLine("ReceiveMessage");
+                Console.WriteLine("ReceiveMeta");
                 var msg = System.Text.Encoding.UTF8.GetString(group.Decrypt(k, message));
 
-                Console.WriteLine(msg);
-                var encodedMsg = $"{group.GetPeerName(k)}: {msg}";
-                messages.Add(encodedMsg);
+                // TODO: Do something with this someday.
+                // For now, use it as a heartbeat
                 StateHasChanged();
             }
             catch (Exception e) {
@@ -113,7 +123,44 @@
             }
         });
 
+        hubConnection.On<byte[], byte[]>("ReceiveMessage", async (k, message) => {
+            try {
+                Console.WriteLine("ReceiveMessage");
+                var msg = System.Text.Encoding.UTF8.GetString(group.Decrypt(k, message));
+
+                var update = await Extensions.IsScrolled(jsRuntime, "conversation");
+                // update = c.clientHeight + c.scrollTop == c.scrollHeight
+                Console.WriteLine(msg);
+                var encodedMsg = $"{group.GetPeerName(k)}: {msg}";
+                messages.Add(encodedMsg);
+                StateHasChanged();
+
+                if (update)
+                    await Extensions.ScrollToEnd(jsRuntime, "conversation");
+                // if update
+                //     document.getElementById('conversation').scrollTo(0, $0.scrollHeight);
+            }
+            catch (Exception e) {
+                Console.WriteLine(e);
+            }
+        });
+
         await hubConnection.StartAsync();
+    }
+
+    async void Timer() {
+        var period = DateTime.UtcNow;
+        
+        while (true) {
+            if ((DateTime.UtcNow - period).TotalSeconds > 60) {
+                Console.WriteLine("Timer triggered");
+                await SendMeta();
+                StateHasChanged();
+                period = DateTime.UtcNow;
+            }
+        
+            await Task.Delay(10000);
+        }
     }
 
     Task Verify() {
@@ -142,10 +189,11 @@
 
         // TODO: Session must be encrypted, using password only.
         // AES - HKDF(password, AES + IV, channel, "Password');
+        group = new MegolmGroup();
         group.Session.Name = userInput;
 
-        // Message Encryption. With salt
-
+        // Maybe a better way to do this, not stopping execution is important.
+        Timer();
 
         byte[] salt = MegolmGroup.GetRandomBytes(32);
         var msg = MegolmGroup.AesCrypt(ikm, salt, info, true, group.Session.Serialize());
@@ -155,13 +203,19 @@
         // await hubConnection.SendAsync("SetNick", channelId, salt, Salinate(salt, group.Session.Serialize()));
     }
 
-    Task Send() {
+    private async Task SendMeta() {
+        var cipherText = group.Encrypt(System.Text.Encoding.UTF8.GetBytes("ping"));
+        StateHasChanged();
+        await hubConnection.SendAsync("SendMeta", channelId, group.Session.Key.PublicKeyRaw, cipherText);
+    }
+    private async void Send(KeyboardEventArgs args) {
+        if (args.Key != "Enter" || messageInput == "" || messageInput == null)
+            return;
         Console.WriteLine("SendMessage");
         var cipherText = group.Encrypt(System.Text.Encoding.UTF8.GetBytes(messageInput));
         messageInput = null;
-        StateHasChanged();
-        // SendMegaolm
-        return hubConnection.SendAsync("SendMessage", channelId, group.Session.Key.PublicKeyRaw, cipherText);
+
+        await hubConnection.SendAsync("SendMessage", channelId, group.Session.Key.PublicKeyRaw, cipherText);
     }
 
     public bool IsConnected =>

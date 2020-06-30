@@ -181,3 +181,17 @@ app {
         display: block;
     }
 }
+
+input {
+    width: 100%; 
+}
+
+.chatbox {
+    height: 80vh;
+}
+
+.conversation {
+    overflow: hidden;
+    overflow-y: auto;
+    max-height: 90%;
+}

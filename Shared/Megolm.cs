@@ -13,16 +13,15 @@ using System.Text;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Macs;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
 using Rfc8032 = Org.BouncyCastle.Math.EC.Rfc8032;
 
-namespace CryptoChat.Shared
-{
+namespace CryptoChat.Shared {
 
     // TODO: Maybe convert to C# API
-    public class Ed25519
-    {
+    public class Ed25519 {
         public static readonly int PrivateKeySize = Rfc8032.Ed25519.SecretKeySize;
         public static readonly int PublicKeySize = Rfc8032.Ed25519.PublicKeySize;
 
@@ -30,32 +29,27 @@ namespace CryptoChat.Shared
         public string PublicKeyBase64 => Convert.ToBase64String(PublicKeyRaw);
         public byte[] PrivateKeyRaw { get; set; }
 
-        static Ed25519()
-        {
+        static Ed25519() {
             Rfc8032.Ed25519.Precompute();
         }
 
 
-        private void Initialize()
-        {
+        private void Initialize() {
             PrivateKeyRaw = new byte[Rfc8032.Ed25519.SecretKeySize];
             PublicKeyRaw = new byte[Rfc8032.Ed25519.PublicKeySize];
         }
 
-        public Ed25519()
-        {
+        public Ed25519() {
             Initialize();
 
-            using (var rng = new RNGCryptoServiceProvider())
-            {
+            using (var rng = new RNGCryptoServiceProvider()) {
                 rng.GetBytes(PrivateKeyRaw);
             }
 
             Rfc8032.Ed25519.GeneratePublicKey(PrivateKeyRaw, 0, PublicKeyRaw, 0);
         }
 
-        public Ed25519(byte[] privateKey)
-        {
+        public Ed25519(byte[] privateKey) {
             Initialize();
 
             Array.Copy(privateKey, PrivateKeyRaw, privateKey.Length);
@@ -63,37 +57,30 @@ namespace CryptoChat.Shared
             Rfc8032.Ed25519.GeneratePublicKey(PrivateKeyRaw, 0, PublicKeyRaw, 0);
         }
 
-        public Ed25519(byte[] privateKey, byte[] publicKey)
-        {
+        public Ed25519(byte[] privateKey, byte[] publicKey) {
             Initialize();
 
-            if (privateKey == null && publicKey == null)
-            {
+            if (privateKey == null && publicKey == null) {
                 throw new Exception("Must have key data");
             }
 
-            if (privateKey == null)
-            {
+            if (privateKey == null) {
                 PrivateKeyRaw = null;
             }
-            else
-            {
+            else {
                 privateKey.CopyTo(PrivateKeyRaw, 0);
             }
 
-            if (publicKey == null)
-            {
+            if (publicKey == null) {
                 Rfc8032.Ed25519.GeneratePublicKey(PrivateKeyRaw, 0, PublicKeyRaw, 0);
             }
-            else
-            {
+            else {
                 // Console.WriteLine($"{publicKey.Length} {PublicKeyRaw.Length}");
                 publicKey.CopyTo(PublicKeyRaw, 0);
             }
         }
 
-        public byte[] Sign(byte[] data, int offset, int length)
-        {
+        public byte[] Sign(byte[] data, int offset, int length) {
             // Console.WriteLine($"Ed25519.Sign: {offset}, {length}");
             var signature = new byte[Rfc8032.Ed25519.SignatureSize];
 
@@ -108,13 +95,11 @@ namespace CryptoChat.Shared
             return signature;
         }
 
-        public bool Verify(byte[] sig, byte[] data)
-        {
+        public bool Verify(byte[] sig, byte[] data) {
             return Verify(sig, 0, data, 0, data.Length);
         }
 
-        public bool Verify(byte[] sig, int sigOffset, byte[] data, int dataOffset, int dataLength)
-        {
+        public bool Verify(byte[] sig, int sigOffset, byte[] data, int dataOffset, int dataLength) {
             // Ed25519  .Sign(sk, 0, m, 0, mLen, sig1, 0);
             // Ed25519.Verify(sig1, 0, pk, 0, m, 0, mLen);
             // Console.WriteLine($"Ed25519.Verify: {sigOffset}, {dataOffset}, {dataLength}");
@@ -127,53 +112,49 @@ namespace CryptoChat.Shared
             return Rfc8032.Ed25519.Verify(sig, sigOffset, PublicKeyRaw, 0, data, dataOffset, dataLength);
         }
 
-        public byte[] Export()
-        {
+        public byte[] Export() {
             var copy = new byte[PublicKeyRaw.Length];
             PublicKeyRaw.CopyTo(copy, 0);
             return copy;
         }
     }
 
-    public class MegolmSession
-    {
+    public class MegolmSession {
         public const int RatchetSize = 128;
         public Ed25519 Key { get; set; }
         public const byte Version = 0x03;
         public uint I { get; set; }
         public byte[] Ratchet { get; set; }
-        public string Name { get; set; }
 
-        public MegolmSession()
-        {
+        // TODO: Separate meta from Session
+        public string Name { get; set; }
+        public DateTime LastActive {get; set; }
+
+        public MegolmSession() {
             Key = new Ed25519();
             Ratchet = new byte[RatchetSize];
             I = 0;
             Name = "Alice"; // TODO: Random Name generators
 
-            using (var rng = new RNGCryptoServiceProvider())
-            {
+            using (var rng = new RNGCryptoServiceProvider()) {
                 rng.GetBytes(Ratchet);
             }
 
-            // Random.NextBytes(PrivateKey);
+            LastActive = DateTime.Now;
         }
 
-        public MegolmSession(byte[] data)
-        {
+        public MegolmSession(byte[] data) {
             Deserialize(data);
+            LastActive = DateTime.Now;
         }
 
-        public static MegolmSession Create(byte[] data)
-        {
+        public static MegolmSession Create(byte[] data) {
             return new MegolmSession(data);
         }
 
-        public void Deserialize(byte[] data)
-        {
+        public void Deserialize(byte[] data) {
             using (var stream = new MemoryStream(data))
-            using (var br = new BinaryReader(stream))
-            {
+            using (var br = new BinaryReader(stream)) {
                 /*
                  +---+----+--------+--------+--------+--------+------+-----------+
                 | V | i  | R(i,0) | R(i,1) | R(i,2) | R(i,3) | Kpub | Signature |
@@ -195,10 +176,8 @@ namespace CryptoChat.Shared
             }
         }
 
-        public byte[] Serialize()
-        {
-            using (var stream = new MemoryStream())
-            {
+        public byte[] Serialize() {
+            using (var stream = new MemoryStream()) {
                 stream.WriteByte(Version);
                 stream.Write(BitConverter.GetBytes(I));
                 stream.Write(Ratchet);
@@ -214,29 +193,64 @@ namespace CryptoChat.Shared
             }
         }
 
-        public void Advance()
-        {
-            // TODO: Update Ratchet.
+        public static readonly byte[][] MegaOlmSeeds = new byte[][] {
+            new byte[] {0x00},
+            new byte[] {0x01},
+            new byte[] {0x02},
+            new byte[] {0x03}
+        };
+
+        private void Rehash(int from, int to) {
+            const int PartLength = RatchetSize / 4;
+
+            var hmac = new HMac(new Sha256Digest());
+            hmac.Init(new KeyParameter(Ratchet, PartLength * from, PartLength));
+            // TODO: Reconcile. Seeds discard perfectly good Entropy?
+            // but allow efficiently fast forwarding the ratchet.
+            // hmac.BlockUpdate(Ratchet, PartLength * to, PartLength);
+            hmac.BlockUpdate(MegaOlmSeeds[to], 0, 1);
+            hmac.DoFinal(Ratchet, PartLength * to);
+        }
+
+        public void Advance() {
+            LastActive = DateTime.Now;
+            Console.WriteLine($"Advance: {I} -> {I + 1} {LastActive}");
             ++I;
+
+            if (I % 0xFFFFFF == 0) {
+                Rehash(0, 3);
+                Rehash(0, 2);
+                Rehash(0, 1);
+                Rehash(0, 0);
+            }
+            else if (I % 0xFFFF == 0) {
+                Rehash(1, 3);
+                Rehash(1, 2);
+                Rehash(1, 1);
+            }
+            else if (I % 0xFF == 0) {
+                Rehash(2, 3);
+                Rehash(2, 2);
+            }
+            else {
+                Rehash(3, 3);
+            }
         }
     }
 
-    public class Message
-    {
+    public class Message {
         public const int Version = 0x03;
         public long MessageIndex { get; set; }
         public byte[] CipherText { get; set; }
         public byte[] MAC { get; set; }
         public byte[] Signature { get; set; }
 
-        public Message()
-        {
+        public Message() {
             MAC = new byte[8];
             Signature = new byte[64];
         }
 
-        public static Message Parse(byte[] data)
-        {
+        public static Message Parse(byte[] data) {
             var ms = new MemoryStream(data);
             if (ms.ReadByte() != Version)
                 throw new Exception("Expected V2 message");
@@ -246,8 +260,7 @@ namespace CryptoChat.Shared
             return msg;
         }
 
-        public byte[] Compute(byte[] hmacKey, Ed25519 key)
-        {
+        public byte[] Compute(byte[] hmacKey, Ed25519 key) {
             // HMAC-SHA-256
             var hmac = HMACSHA256.Create();
             hmac.Key = hmacKey;
@@ -266,27 +279,23 @@ namespace CryptoChat.Shared
             return stream.ToArray();
         }
 
-        private void WriteMessageIndex(Stream stream)
-        {
+        private void WriteMessageIndex(Stream stream) {
             WriteInteger(stream, 0x08);  // Message-Index
             WriteInteger(stream, MessageIndex);
         }
 
-        private void WriteCipherText(Stream stream)
-        {
+        private void WriteCipherText(Stream stream) {
             WriteInteger(stream, 0x12); // Cipher-Text
             WriteString(stream, CipherText);
         }
 
-        protected void WriteInteger(Stream stream, long integer)
-        {
+        protected void WriteInteger(Stream stream, long integer) {
             ulong value = (ulong)integer;
             byte b = 0;
 
             int start = (int)stream.Position;
 
-            do
-            {
+            do {
                 b = (byte)(value & 0b0111_1111);
                 value >>= 7;
 
@@ -299,16 +308,14 @@ namespace CryptoChat.Shared
             Console.WriteLine(BitConverter.ToString(new ReadOnlySpan<byte>(((MemoryStream)stream).GetBuffer(), start, end - start).ToArray()));
         }
 
-        protected void WriteString(Stream stream, byte[] value)
-        {
+        protected void WriteString(Stream stream, byte[] value) {
             if (value == null)
                 throw new Exception("Handle null string");
             WriteInteger(stream, value.Length);
             stream.Write(value, 0, value.Length);
         }
 
-        public void Parse(Stream stream)
-        {
+        public void Parse(Stream stream) {
             // Read Message-Index & Cipher-Text
             ReadTag(stream);
             ReadTag(stream);
@@ -320,11 +327,9 @@ namespace CryptoChat.Shared
                 throw new Exception("Excess data in message");
         }
 
-        protected void ReadTag(Stream stream)
-        {
+        protected void ReadTag(Stream stream) {
             var tag = ReadInteger(stream);
-            switch (tag)
-            {
+            switch (tag) {
                 case 0x08: // Message-Index
                     MessageIndex = ReadInteger(stream);
                     break;
@@ -337,14 +342,12 @@ namespace CryptoChat.Shared
             }
         }
 
-        protected int ReadInteger(Stream stream)
-        {
+        protected int ReadInteger(Stream stream) {
             int value = 0;
             byte b = 0;
             int shifts = 0;
 
-            do
-            {
+            do {
                 b = (byte)stream.ReadByte();
                 Console.WriteLine($"{b:X}");
                 value |= (b & 0b0111_1111) << shifts;
@@ -355,8 +358,7 @@ namespace CryptoChat.Shared
             return value;
         }
 
-        protected byte[] ReadString(Stream stream)
-        {
+        protected byte[] ReadString(Stream stream) {
             var length = ReadInteger(stream);
 
             byte[] buffer = new byte[length];
@@ -368,37 +370,32 @@ namespace CryptoChat.Shared
 
     }
 
-    sealed public class MegolmGroup
-    {
+    sealed public class MegolmGroup {
         public MegolmSession Session { get; set; }
         Dictionary<string, MegolmSession> Peers { get; set; }
         public List<MegolmSession> PeerList => Peers.Values.ToList();
 
         public readonly byte[] Info = System.Text.Encoding.UTF8.GetBytes("MEGOLM_KEYS");
 
-        public MegolmGroup()
-        {
+        public MegolmGroup() {
             Peers = new Dictionary<string, MegolmSession>();
             Session = new MegolmSession();
 
             Peers.Add(Session.Key.PublicKeyBase64, Session);
         }
 
-        public static byte[] GetRandomBytes(int length)
-        {
+        public static byte[] GetRandomBytes(int length) {
             SecureRandom prng = new SecureRandom();
 
             return SecureRandom.GetNextBytes(prng, length);
         }
 
-        public string GetPeerName(byte[] k)
-        {
+        public string GetPeerName(byte[] k) {
             return Peers[Convert.ToBase64String(k)].Name;
         }
 
         /// Return True if new Peer
-        public bool AddPeer(byte[] data)
-        {
+        public bool AddPeer(byte[] data) {
             var session = MegolmSession.Create(data);
 
             // Error, or at least warn
@@ -412,8 +409,7 @@ namespace CryptoChat.Shared
         }
 
 
-        static public byte[] HKDF(byte[] ikm, int length, byte[] salt, byte[] info)
-        {
+        static public byte[] HKDF(byte[] ikm, int length, byte[] salt, byte[] info) {
             IDigest hash = new Sha256Digest();
 
             var p = new HkdfParameters(ikm, salt, info);
@@ -427,8 +423,7 @@ namespace CryptoChat.Shared
         }
 
         // Generic encrypt/decrypt with AES
-        static public byte[] AesCrypt(bool encrypt, byte[] aesKey, byte[] hmacKey, byte[] aesIV, byte[] payload)
-        {
+        static public byte[] AesCrypt(bool encrypt, byte[] aesKey, byte[] hmacKey, byte[] aesIV, byte[] payload) {
             KeyParameter key = ParameterUtilities.CreateKeyParameter("AES", aesKey);
             IBufferedCipher inCipher = CipherUtilities.GetCipher("AES/CBC/PKCS7PADDING");
             inCipher.Init(encrypt, new ParametersWithIV(key, aesIV));
@@ -436,8 +431,7 @@ namespace CryptoChat.Shared
         }
 
         // Performs HKDF, then encrypt/decrypt with AES-CBC
-        static public byte[] AesCrypt(byte[] ikm, byte[] salt, byte[] info, bool encrypt, byte[] data)
-        {
+        static public byte[] AesCrypt(byte[] ikm, byte[] salt, byte[] info, bool encrypt, byte[] data) {
             var okm = MegolmGroup.HKDF(ikm, 80, salt, info);
 
             byte[] aesKey = new byte[32];
@@ -452,8 +446,7 @@ namespace CryptoChat.Shared
             return AesCrypt(encrypt, aesKey, hmacKey, aesIV, data);
         }
 
-        public byte[] Encrypt(byte[] payload)
-        {
+        public byte[] Encrypt(byte[] payload) {
             // Console.WriteLine($"Encrypt: {payload}");
             // AES_KEYi | HMAC_KEYi​ | AES_IVi​ ​ = HKDF(0,Ri​,"MEGOLM_KEYS",80)​
             // HKDF = HKDF-SHA_256 (salt, ikm, info, Length)
@@ -465,10 +458,12 @@ namespace CryptoChat.Shared
             Array.Copy(okm, 0, aesKey, 0, aesKey.Length);
             Array.Copy(okm, aesKey.Length, hmacKey, 0, hmacKey.Length);
             Array.Copy(okm, aesKey.Length + hmacKey.Length, aesIV, 0, aesIV.Length);
-            Session.Advance();
+            // TODO: reconcile this, we don't advance because we expect to 
+            // decrypt own messages.
+            // Session.Advance();
 
             var msg = new Message();
-            msg.MessageIndex = (int)Session.I++;
+            msg.MessageIndex = (int)Session.I;
             msg.CipherText = AesCrypt(true, aesKey, hmacKey, aesIV, payload);
 
             var oHash = BitConverter.ToString(SHA256.Create().ComputeHash(okm));
@@ -482,8 +477,7 @@ namespace CryptoChat.Shared
 
 
 
-        public byte[] Decrypt(byte[] id, byte[] data)
-        {
+        public byte[] Decrypt(byte[] id, byte[] data) {
             // TODO: This is an error, make it pretty. Should Abort chat(channel secrecy is compromised)
             var peer = Peers[Convert.ToBase64String(id)];
             var msg = Message.Parse(data);
