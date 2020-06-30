@@ -1,4 +1,6 @@
 ---
+# TODO: Maybe HTTP to HTTPS.  Instead of forcing elsewhere
+---
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:

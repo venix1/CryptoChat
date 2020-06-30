@@ -4,7 +4,8 @@ WORKDIR /app
 COPY . ./
 
 RUN dotnet restore
-RUN dotnet publish -c Release -o out
+# RUN dotnet publish -c Release -o out
+RUN dotnet publish -c Debug -o out
 
 # Build runtime image
 FROM mcr.microsoft.com/dotnet/core/aspnet:3.1
