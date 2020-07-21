@@ -13,19 +13,9 @@ namespace CryptoChat.Server.Hubs {
             await Groups.AddToGroupAsync(Context.ConnectionId, group.ToString());
         }
 
-        public async Task SendSession(Guid group, byte[] salt, byte[] session) {
-            Console.WriteLine($"SendSession: {group.ToString()}");
-            await Clients.OthersInGroup(group.ToString()).SendAsync("ReceiveSession", salt, session);
-        }
-
-        public async Task SendMeta(Guid group, byte[] k, byte[] message) {
-            Console.WriteLine($"Meta -> {group.ToString()}");
-            await Clients.Group(group.ToString()).SendAsync("ReceiveMeta", k, message);
-        }
-
-        public async Task SendMessage(Guid group, byte[] k, byte[] message) {
+        public async Task SendMessage(Guid group, byte[] message) {
             Console.WriteLine($"Message -> {group.ToString()}");
-            await Clients.Group(group.ToString()).SendAsync("ReceiveMessage", k, message);
+            await Clients.Group(group.ToString()).SendAsync("ReceiveMessage", message);
         }
     }
 }

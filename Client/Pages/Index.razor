@@ -1,7 +1,6 @@
 ﻿@page "/"
 @page "/chat"
 @using Microsoft.AspNetCore.SignalR.Client
-@using System.Security.Cryptography
 @using CryptoChat.Shared;
 @using System.Linq;
 @inject IJSRuntime jsRuntime
@@ -36,7 +35,7 @@ else {
 <div class="chat-app container" >
     <div id="chatbox" class="chatbox row">
         <div id="conversation" class="conversation col-9 card">
-            @foreach (var message in messages) {
+            @foreach (var message in ChatClient.History) {
                 <div class="message">@message</div>
             }
             <div id="anchor"></div>
@@ -45,12 +44,12 @@ else {
             <div>Party Size: ???</div>
             <b>Active:</b>
             <div id="activeMembers">
-            @foreach (var peer in group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds <= 90)) {
+            @foreach (var peer in ChatClient.Group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds <= 90)) {
                 <div class="member d-flex justify-content-end" data-toggle="tooltip" data-placement="top" title="Last Active: @peer.LastActive" >@peer.Name</div>
             }</div>
             <b>Inactive:</b>
             <div id="inactiveMembers">
-            @foreach (var peer in group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds > 90)) {
+            @foreach (var peer in ChatClient.Group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds > 90)) {
                 <div class="member d-flex justify-content-end" data-toggle="tooltip" data-placement="top" title="Last Active: @peer.LastActive" >@peer.Name</div>
             }
             </div>
@@ -58,85 +57,42 @@ else {
     </div>
     <div class="row">
     <div class="messageBox col card">
-        <span><input placeholder="Your message..." @bind="messageInput" @onkeyup="Send" /></span>
+        <span><input placeholder="Your message..." @bind="messageInput" @onkeyup="SendMessage" /></span>
     </div>
     </div>
 </div>
 }
 @code {
     private HubConnection hubConnection;
-    private List<string> messages = new List<string>();
     private string userInput;
     private string groupInput;
     private string passwordInput;
     private string messageInput;
-    private Guid channelId;
-
-    private MegolmGroup group;
-
-    protected byte[] Desalinate(byte[] salt, byte[] data) {
-        byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
-        byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
-        return MegolmGroup.AesCrypt(ikm, salt, info, false, data);
-    }
-    protected byte[] Salinate(byte[] salt, byte[] data) {
-        byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
-        byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
-        return MegolmGroup.AesCrypt(ikm, salt, info, true, data);
-    }
-
+    private CryptoChat ChatClient {get; set; }
     protected override async Task OnInitializedAsync() {
         // TODO: Hub shoud CryptedTransport(Generated ECDH)
         hubConnection = new HubConnectionBuilder()
             .WithUrl(NavigationManager.ToAbsoluteUri($"/chathub"))
             .Build();
 
-        hubConnection.On<byte[], byte[]>("ReceiveSession", async (salt, data) => {
+        // TODO: Becomes only function, which hands off to ChatApp for processing
+        hubConnection.On<byte[]>("ReceiveMessage", async (message) => {
             try {
-
-                bool newPeer = group.AddPeer(Desalinate(salt, data));
-                Console.WriteLine($"AddPeer: {newPeer}");
-                if (newPeer) {
-                    salt = MegolmGroup.GetRandomBytes(32);
-
-                    await hubConnection.SendAsync("SendSession", channelId, salt, Salinate(salt, group.Session.Serialize()));
-                    StateHasChanged();
-                }
-                Console.WriteLine("Done");
-            }
-            catch (Exception e) {
-                Console.WriteLine(e);
-            }
-        });
-
-        hubConnection.On<byte[], byte[]>("ReceiveMeta", async (k, message) => {
-            try {
-                Console.WriteLine("ReceiveMeta");
-                var msg = System.Text.Encoding.UTF8.GetString(group.Decrypt(k, message));
-
-                // TODO: Do something with this someday.
-                // For now, use it as a heartbeat
+                await ChatClient.OnMessage(message);
                 StateHasChanged();
-            }
-            catch (Exception e) {
-                Console.WriteLine(e);
-            }
-        });
 
-        hubConnection.On<byte[], byte[]>("ReceiveMessage", async (k, message) => {
-            try {
+                /*
                 Console.WriteLine("ReceiveMessage");
                 var msg = System.Text.Encoding.UTF8.GetString(group.Decrypt(k, message));
 
                 var update = await Extensions.IsScrolled(jsRuntime, "conversation");
-                // update = c.clientHeight + c.scrollTop == c.scrollHeight
-                Console.WriteLine(msg);
                 var encodedMsg = $"{group.GetPeerName(k)}: {msg}";
                 messages.Add(encodedMsg);
                 StateHasChanged();
 
                 if (update)
                     await Extensions.ScrollToEnd(jsRuntime, "conversation");
+                */
                 // if update
                 //     document.getElementById('conversation').scrollTo(0, $0.scrollHeight);
             }
@@ -154,7 +110,7 @@ else {
         while (true) {
             if ((DateTime.UtcNow - period).TotalSeconds > 60) {
                 Console.WriteLine("Timer triggered");
-                await SendMeta();
+                await ChatClient.Ping();
                 StateHasChanged();
                 period = DateTime.UtcNow;
             }
@@ -179,49 +135,39 @@ else {
 
         return Task.FromResult(0);
     }
+    async Task Send(byte[] data) {
+        Console.WriteLine("Sending message...");
+        await hubConnection.SendAsync("SendMessage", ChatClient.Channel, data);
+    }
+
     async Task Connect() {
-        byte[] ikm = System.Text.Encoding.UTF8.GetBytes(passwordInput);
+        var passwdBytes = System.Text.Encoding.UTF8.GetBytes(passwordInput);
+        var groupBytes = System.Text.Encoding.UTF8.GetBytes(groupInput);
+        ChatClient = new CryptoChat(Send, groupBytes, passwdBytes);
 
-        byte[] info = System.Text.Encoding.UTF8.GetBytes(groupInput);
+        // This is sets up server routing only.
+        await hubConnection.SendAsync("JoinGroup", ChatClient.Channel);
 
-        // Calculate Channel as Guid. No salt.
-        channelId = new Guid(MegolmGroup.HKDF(ikm, 16, null, info));
+        // Handle Chat related joining
+        await ChatClient.Join();
+        await ChatClient.SetNick(userInput);
 
-        // TODO: Session must be encrypted, using password only.
-        // AES - HKDF(password, AES + IV, channel, "Password');
-        group = new MegolmGroup();
-        group.Session.Name = userInput;
-
+        // Periodic Updates are necessary
         // Maybe a better way to do this, not stopping execution is important.
         Timer();
-
-        byte[] salt = MegolmGroup.GetRandomBytes(32);
-        var msg = MegolmGroup.AesCrypt(ikm, salt, info, true, group.Session.Serialize());
-
-        await hubConnection.SendAsync("JoinGroup", channelId);
-        await hubConnection.SendAsync("SendSession", channelId, salt, Salinate(salt, group.Session.Serialize()));
-        // await hubConnection.SendAsync("SetNick", channelId, salt, Salinate(salt, group.Session.Serialize()));
     }
 
-    private async Task SendMeta() {
-        var cipherText = group.Encrypt(System.Text.Encoding.UTF8.GetBytes("ping"));
-        StateHasChanged();
-        await hubConnection.SendAsync("SendMeta", channelId, group.Session.Key.PublicKeyRaw, cipherText);
-    }
-    private async void Send(KeyboardEventArgs args) {
+    private async void SendMessage(KeyboardEventArgs args) {
         if (args.Key != "Enter" || messageInput == "" || messageInput == null)
             return;
-        Console.WriteLine("SendMessage");
-        var cipherText = group.Encrypt(System.Text.Encoding.UTF8.GetBytes(messageInput));
-        messageInput = null;
-
-        await hubConnection.SendAsync("SendMessage", channelId, group.Session.Key.PublicKeyRaw, cipherText);
+        Console.WriteLine("Send text");
+        await ChatClient.TextMessage(messageInput);
     }
 
-    public bool IsConnected =>
+    public bool IsConnected => 
         hubConnection.State == HubConnectionState.Connected;
     public bool HasGroup =>
-        group != null;
+        ChatClient != null && ChatClient.Group != null;
 
     public void Dispose() {
         _ = hubConnection.DisposeAsync();
