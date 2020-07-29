@@ -68,35 +68,31 @@ else {
     private string groupInput;
     private string passwordInput;
     private string messageInput;
-    private CryptoChat ChatClient {get; set; }
-    protected override async Task OnInitializedAsync() {
+    private CryptoChat ChatClient { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
         // TODO: Hub shoud CryptedTransport(Generated ECDH)
         hubConnection = new HubConnectionBuilder()
             .WithUrl(NavigationManager.ToAbsoluteUri($"/chathub"))
             .Build();
 
         // TODO: Becomes only function, which hands off to ChatApp for processing
-        hubConnection.On<byte[]>("ReceiveMessage", async (message) => {
-            try {
+        hubConnection.On<byte[]>("ReceiveMessage", async (message) =>
+        {
+            try
+            {
+                var count = ChatClient.History.Count;
+                var update = await Extensions.IsScrolled(jsRuntime, "conversation");
+
                 await ChatClient.OnMessage(message);
                 StateHasChanged();
 
-                /*
-                Console.WriteLine("ReceiveMessage");
-                var msg = System.Text.Encoding.UTF8.GetString(group.Decrypt(k, message));
-
-                var update = await Extensions.IsScrolled(jsRuntime, "conversation");
-                var encodedMsg = $"{group.GetPeerName(k)}: {msg}";
-                messages.Add(encodedMsg);
-                StateHasChanged();
-
-                if (update)
+                Console.WriteLine($"{update} {count} {ChatClient.History.Count}");
+                if (update && ChatClient.History.Count != count)
                     await Extensions.ScrollToEnd(jsRuntime, "conversation");
-                */
-                // if update
-                //     document.getElementById('conversation').scrollTo(0, $0.scrollHeight);
             }
-            catch (Exception e) {
+            catch (Exception e)
+            {
                 Console.WriteLine(e);
             }
         });
@@ -104,22 +100,26 @@ else {
         await hubConnection.StartAsync();
     }
 
-    async void Timer() {
+    async void Timer()
+    {
         var period = DateTime.UtcNow;
-        
-        while (true) {
-            if ((DateTime.UtcNow - period).TotalSeconds > 60) {
+
+        while (true)
+        {
+            if ((DateTime.UtcNow - period).TotalSeconds > 60)
+            {
                 Console.WriteLine("Timer triggered");
                 await ChatClient.Ping();
                 StateHasChanged();
                 period = DateTime.UtcNow;
             }
-        
+
             await Task.Delay(10000);
         }
     }
 
-    Task Verify() {
+    Task Verify()
+    {
         // Level 1 TLS is HTTPS.  This can be considered passively transparent.
         // Level 2 is TLS for SignalR.  This is actively transparent.
         // Level 3 is PSK.  This is secure unless a malicious party has stolen.
@@ -135,12 +135,14 @@ else {
 
         return Task.FromResult(0);
     }
-    async Task Send(byte[] data) {
+    async Task Send(byte[] data)
+    {
         Console.WriteLine("Sending message...");
         await hubConnection.SendAsync("SendMessage", ChatClient.Channel, data);
     }
 
-    async Task Connect() {
+    async Task Connect()
+    {
         var passwdBytes = System.Text.Encoding.UTF8.GetBytes(passwordInput);
         var groupBytes = System.Text.Encoding.UTF8.GetBytes(groupInput);
         ChatClient = new CryptoChat(Send, groupBytes, passwdBytes);
@@ -157,19 +159,22 @@ else {
         Timer();
     }
 
-    private async void SendMessage(KeyboardEventArgs args) {
+    private async void SendMessage(KeyboardEventArgs args)
+    {
         if (args.Key != "Enter" || messageInput == "" || messageInput == null)
             return;
         Console.WriteLine("Send text");
         await ChatClient.TextMessage(messageInput);
+        messageInput = "";
     }
 
-    public bool IsConnected => 
+    public bool IsConnected =>
         hubConnection.State == HubConnectionState.Connected;
     public bool HasGroup =>
         ChatClient != null && ChatClient.Group != null;
 
-    public void Dispose() {
+    public void Dispose()
+    {
         _ = hubConnection.DisposeAsync();
     }
 }

@@ -50,6 +50,7 @@ namespace CryptoChat.Shared
             ClientKey = new Ed25519();
 
             Group = new MegolmGroup();
+            Group.Session.Peer = PeerKey;
         }
 
         public CryptoChat(Func<byte[], Task> fn, byte[] group, byte[] passwd) : this()
@@ -89,6 +90,7 @@ namespace CryptoChat.Shared
         {
             var msg = new MetaMessage("ping", "pong");
             await SendSession(msg);
+            await Rekey();
         }
 
         public async Task TextMessage(string text)
@@ -101,6 +103,17 @@ namespace CryptoChat.Shared
         {
             var payload = SessionEncrypt(msg);
             await Send(payload);
+        }
+
+        private async Task Rekey()
+        {
+            Group.Session.Key = new Ed25519();
+
+            foreach (var peer in Group.PeerList)
+            {
+                Console.WriteLine($"Rekey: {peer.Peer}:");
+                await SendMegolmSession(peer.Peer);
+            }
         }
 
         private async Task SendGroup(Message msg)
@@ -168,7 +181,7 @@ namespace CryptoChat.Shared
             var msg = (MetaMessage)m;
 
             var session = SessionDecrypt(msg);
-            
+
             switch (msg.Key)
             {
                 case "text":
@@ -188,7 +201,9 @@ namespace CryptoChat.Shared
         {
             var msg = (PeerHandshake)m;
 
-            (var aesKey, var hmac) = PeerKey.ComputeSharedSecret(msg.PlainText);
+            var peer = new X25519(null, msg.PlainText);
+
+            (var aesKey, var hmac) = PeerKey.ComputeSharedSecret(peer);
             // Failure is expected. Any Handshake will trigger this.
             // Only expected peers validate.  
             if (!msg.Verify(hmac, msg.Sender))
@@ -197,6 +212,7 @@ namespace CryptoChat.Shared
             }
 
             msg.Decrypt(aesKey);
+            msg.Session.Peer = peer;
 
             // New Peer needs session info
             if (Group.AddPeer(msg.Session))
