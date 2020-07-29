@@ -32,6 +32,10 @@ namespace CryptoChat.Shared
 
         // TODO: Separate meta from Session
         public string Name { get; set; }
+        public X25519 Peer { get; set; }
+
+        /// <summary>Link related sessions</summary>
+        public X25519 Next {get; set; }
         public DateTime LastActive { get; set; }
 
         public MegolmSession()
@@ -189,6 +193,13 @@ namespace CryptoChat.Shared
             // Error, or at least warn
             if (Peers.ContainsKey(session.Key.PublicKeyBase64))
                 return false;
+
+            // Track equal X25519 keys for eventual cleanup
+            foreach(var peer in Peers.Values) {
+                if (peer.Peer.PublicKey == session.Peer.PublicKey) {
+                    // peer.Next = session;
+                }
+            }
 
             Peers.Add(session.Key.PublicKeyBase64, session);
             Console.WriteLine($"Peer: {session.Key.PublicKeyBase64}");
