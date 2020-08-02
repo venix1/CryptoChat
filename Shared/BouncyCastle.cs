@@ -1,6 +1,7 @@
 // Helpers for Bouncy Castle to abstract it's use.
 
 using System;
+using System.Linq;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -48,7 +49,7 @@ namespace CryptoChat.Shared
         }
     }
 
-    public class X25519
+    public class X25519 : IEquatable<X25519>
     {
         public byte[] PrivateKey { get; set; }
         public byte[] PublicKey { get; set; }
@@ -57,6 +58,8 @@ namespace CryptoChat.Shared
         {
             PrivateKey = new byte[32];
             PublicKey = new byte[32];
+
+            BouncyCastle.SecureRandom.NextBytes(PrivateKey);
 
             Rfc7748.X25519.ScalarMultBase(PrivateKey, 0, PublicKey, 0);
         }
@@ -67,10 +70,11 @@ namespace CryptoChat.Shared
             PublicKey = publicKey;
         }
 
-        public (byte[], byte[]) ComputeSharedSecret(X25519 publicKey) {
+        public (byte[], byte[]) ComputeSharedSecret(X25519 publicKey)
+        {
             return ComputeSharedSecret(publicKey.PublicKey);
         }
-        
+
         public (byte[], byte[]) ComputeSharedSecret(byte[] publicKey)
         {
             byte[] secret = new byte[64]; // aes + hmac
@@ -81,9 +85,29 @@ namespace CryptoChat.Shared
             Array.Copy(secret, aesKey.Length, hmacKey, 0, hmacKey.Length);
             return (aesKey, hmacKey);
         }
+
+        public bool Equals(X25519 key)
+        {
+                var p1 = BitConverter.ToString(PublicKey);
+                var p2 = BitConverter.ToString(key.PublicKey);
+            Console.WriteLine("X25519=: {0}\n  {1}\n  {2}.", PublicKey.SequenceEqual(key.PublicKey), p1, p2);
+
+            return PublicKey.SequenceEqual(key.PublicKey);
+
+        }
+
+        public override int GetHashCode()
+        {
+            return (PublicKey[0] | PublicKey[1] << 8 | PublicKey[2] << 16 | PublicKey[3] << 24);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return Equals(obj as X25519);
+        }
     }
 
-    public class Ed25519
+    public class Ed25519 : IEquatable<Ed25519>
     {
         public static readonly int PrivateKeySize = Rfc8032.Ed25519.SecretKeySize;
         public static readonly int PublicKeySize = Rfc8032.Ed25519.PublicKeySize;
@@ -146,7 +170,7 @@ namespace CryptoChat.Shared
             }
             else
             {
-                Console.WriteLine($"{publicKey.Length} {PublicKey.Length}");
+                // Console.WriteLine($"{publicKey.Length} {PublicKey.Length}");
                 publicKey.CopyTo(PublicKey, 0);
             }
         }
@@ -176,6 +200,24 @@ namespace CryptoChat.Shared
             var copy = new byte[PublicKey.Length];
             PublicKey.CopyTo(copy, 0);
             return copy;
+        }
+
+        public bool Equals(Ed25519 key)
+        {
+            Console.WriteLine("Ed25519=: {0}", PublicKey.SequenceEqual(key.PublicKey));
+
+            return PublicKey.SequenceEqual(key.PublicKey);
+
+        }
+
+        public override int GetHashCode()
+        {
+            return (PublicKey[0] | PublicKey[1] << 8 | PublicKey[2] << 16 | PublicKey[3] << 24);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return Equals(obj as Ed25519);
         }
     }
 }
