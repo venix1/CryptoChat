@@ -41,15 +41,15 @@ else {
             <div id="anchor"></div>
         </div>
         <div id="members" class = "members card col">
-            <div>Party Size: ???</div>
+            <div>Party Size: @ChatClient.Group.CurrentPeers.Count()</div>
             <b>Active:</b>
             <div id="activeMembers">
-            @foreach (var peer in ChatClient.Group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds <= 90)) {
+            @foreach (var peer in ChatClient.Group.ActivePeers) {
                 <div class="member d-flex justify-content-end" data-toggle="tooltip" data-placement="top" title="Last Active: @peer.LastActive" >@peer.Name</div>
             }</div>
             <b>Inactive:</b>
             <div id="inactiveMembers">
-            @foreach (var peer in ChatClient.Group.PeerList.Where(p => (DateTime.Now - p.LastActive).TotalSeconds > 90)) {
+            @foreach (var peer in ChatClient.Group.InactivePeers) {
                 <div class="member d-flex justify-content-end" data-toggle="tooltip" data-placement="top" title="Last Active: @peer.LastActive" >@peer.Name</div>
             }
             </div>
