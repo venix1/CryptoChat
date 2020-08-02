@@ -51,6 +51,7 @@ namespace CryptoChat.Shared
 
             Group = new MegolmGroup();
             Group.Session.Peer = PeerKey;
+            Console.WriteLine("Client Peer: {0}",   BitConverter.ToString(PeerKey.PublicKey));
         }
 
         public CryptoChat(Func<byte[], Task> fn, byte[] group, byte[] passwd) : this()
@@ -90,7 +91,7 @@ namespace CryptoChat.Shared
         {
             var msg = new MetaMessage("ping", "pong");
             await SendSession(msg);
-            await Rekey();
+            // await Rekey();
         }
 
         public async Task TextMessage(string text)
@@ -107,10 +108,23 @@ namespace CryptoChat.Shared
 
         private async Task Rekey()
         {
-            Group.Session.Key = new Ed25519();
+            Console.WriteLine("Rekey");
+            // Duplicate Session
+            // Group.Session = MegolmSession.Create(Group.Session.Serialize());
+            var session = new MegolmSession();
+            session.I = Group.Session.I;
+            session.LastActive = Group.Session.LastActive;
+            session.Name = Group.Session.Name;
+            session.Peer = Group.Session.Peer;
+            session.Ratchet = Group.Session.Ratchet;
+            session.Key = new Ed25519();
+            Group.Session = session;
+            Group.AddPeer(Group.Session);
 
-            foreach (var peer in Group.PeerList)
+            foreach (var peer in Group.CurrentPeers)
             {
+                if (PeerKey.Equals(peer.Peer))
+                    continue;
                 Console.WriteLine($"Rekey: {peer.Peer}:");
                 await SendMegolmSession(peer.Peer);
             }
@@ -125,13 +139,11 @@ namespace CryptoChat.Shared
             await Send(msg.Compute(GroupHmac, ClientKey));
         }
 
+        /// <summary> Encrypt peer, HMAC peer, Sign client</summary>
         private async Task SendPeer(X25519 peer, Message msg)
         {
-            // Encrypts with Peer key
-            // Macs with Peer Key
-            // Signs with Client key
             (var aesKey, var hmacKey) = PeerKey.ComputeSharedSecret(peer.PublicKey);
-            msg.PlainText = peer.PublicKey;
+            msg.PlainText = PeerKey.PublicKey;
             msg.Encrypt(aesKey);
             await Send(msg.Compute(hmacKey, ClientKey));
         }
@@ -163,7 +175,8 @@ namespace CryptoChat.Shared
             var msg = (JoinMessage)m;
             GroupDecrypt(msg);
 
-            if (msg.SignKey.PublicKey == ClientKey.PublicKey)
+            // Ignore own join message
+            if (msg.SignKey.Equals(ClientKey))
                 return;
 
             await SendMegolmSession(msg.EncryptKey);
@@ -188,7 +201,8 @@ namespace CryptoChat.Shared
                     History.Add($"{session.Name}: {msg.Value}");
                     break;
                 case "ping":
-                    Console.WriteLine("pong");
+                    session.LastActive = DateTime.Now;
+                    Console.WriteLine("pong: {0}", session.LastActive);
                     break;
                 default:
                     break;
@@ -211,6 +225,9 @@ namespace CryptoChat.Shared
                 return;
             }
 
+            if (PeerKey.Equals(peer))
+                return;
+
             msg.Decrypt(aesKey);
             msg.Session.Peer = peer;
 
@@ -221,7 +238,7 @@ namespace CryptoChat.Shared
             }
             else
             {
-                Console.WriteLine("Duplicate Peer");
+                Console.WriteLine("Duplicate Peer: {0}\n  {1}", msg.Session.Key.PublicKeyBase64, Group.Session.Key.PublicKeyBase64);
             }
         }
 
