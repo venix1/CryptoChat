@@ -99,7 +99,8 @@ namespace CryptoChat.Shared
             var offset = Signature.Length + 32 + MAC.Length;
             var message = new ReadOnlySpan<byte>(Bytes, 0, Bytes.Length - offset);
             var result = BouncyCastle.HmacSha256(hmacKey, message.ToArray());
-            if (!result.Take(8).SequenceEqual(MAC)) {
+            if (!result.Take(8).SequenceEqual(MAC))
+            {
                 Console.WriteLine("INFO: Message HMAC failure");
                 Console.WriteLine(BitConverter.ToString(result.Take(8).ToArray()));
                 Console.WriteLine(BitConverter.ToString(MAC));
@@ -119,7 +120,7 @@ namespace CryptoChat.Shared
             WriteCipherText(stream);
 
             var hmac = stream.Position;
-            Console.WriteLine($"HMAC: {stream.Position}");
+            // Console.WriteLine($"HMAC: {stream.Position}");
             var result = BouncyCastle.HmacSha256(hmacKey, stream.ToArray());
             stream.Write(result, 0, 8);
 
@@ -171,7 +172,6 @@ namespace CryptoChat.Shared
                 stream.WriteByte(b);
             } while (value != 0);
             int end = (int)stream.Position;
-            Console.WriteLine(BitConverter.ToString(new ReadOnlySpan<byte>(((MemoryStream)stream).GetBuffer(), start, end - start).ToArray()));
         }
 
         protected void WriteString(Stream stream, byte[] value)
@@ -206,8 +206,8 @@ namespace CryptoChat.Shared
             Sender = new Ed25519(null, sender);
             stream.Read(Signature);
 
-            Console.WriteLine($"Lengths: {hmac} {stream.Position} {stream.Position - hmac}");
-            Console.WriteLine($"{stream.Length} {stream.Position}");
+            // Console.WriteLine($"Lengths: {hmac} {stream.Position} {stream.Position - hmac}");
+            // Console.WriteLine($"{stream.Length} {stream.Position}");
             if (stream.Length != stream.Position)
                 throw new Exception("Excess data in message");
         }
@@ -247,7 +247,6 @@ namespace CryptoChat.Shared
             do
             {
                 b = (byte)stream.ReadByte();
-                Console.WriteLine($"{b:X}");
                 value |= (b & 0b0111_1111) << shifts;
                 shifts += 7;
             }
@@ -319,11 +318,13 @@ namespace CryptoChat.Shared
 
         override protected void PreEncrypt()
         {
+            Console.WriteLine("PE Session: {0}", Session.Key.PublicKeyBase64);
             CipherText = Session.Serialize();
         }
         override protected void PostDecrypt()
         {
             Session = MegolmSession.Create(CipherText);
+            Console.WriteLine("PD Session: {0}", Session.Key.PublicKeyBase64);
         }
     }
 
