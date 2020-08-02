@@ -35,7 +35,7 @@ namespace CryptoChat.Shared
         public X25519 Peer { get; set; }
 
         /// <summary>Link related sessions</summary>
-        public X25519 Next {get; set; }
+        public MegolmSession Next { get; set; }
         public DateTime LastActive { get; set; }
 
         public MegolmSession()
@@ -87,6 +87,7 @@ namespace CryptoChat.Shared
 
                 if (!Key.Verify(data, (int)stream.Position, data, 0, (int)stream.Position))
                     throw new Exception("Failed to verify Session");
+                LastActive = DateTime.Now;
             }
         }
 
@@ -187,22 +188,39 @@ namespace CryptoChat.Shared
             return Peers[Convert.ToBase64String(k)].Name;
         }
 
+        public IEnumerable<MegolmSession> CurrentPeers => PeerList.Where(p => p.Next == null);
+
+        public IEnumerable<MegolmSession> ActivePeers =>
+            CurrentPeers.Where(p => (DateTime.Now - p.LastActive).TotalSeconds <= 90);
+        public IEnumerable<MegolmSession> InactivePeers =>
+            CurrentPeers.Where(p => (DateTime.Now - p.LastActive).TotalSeconds > 90);
+
         /// Return True if new Peer
         public bool AddPeer(MegolmSession session)
         {
+            Console.WriteLine("Add Peer");
+
             // Error, or at least warn
             if (Peers.ContainsKey(session.Key.PublicKeyBase64))
                 return false;
 
+            Console.WriteLine($"pc: {Peers.Count}");
+
             // Track equal X25519 keys for eventual cleanup
-            foreach(var peer in Peers.Values) {
-                if (peer.Peer.PublicKey == session.Peer.PublicKey) {
-                    // peer.Next = session;
+            foreach (var peer in Peers.Values)
+            {
+                var p1 = BitConverter.ToString(peer.Peer.PublicKey);
+                var p2 = BitConverter.ToString(session.Peer.PublicKey);
+                Console.WriteLine($"pn: {peer.Next}\n  -{p1}\n  +{p2}");
+                if (peer.Peer.Equals(session.Peer) && peer.Next == null)
+                {
+                    Console.WriteLine("next");
+                    peer.Next = session;
                 }
             }
 
             Peers.Add(session.Key.PublicKeyBase64, session);
-            Console.WriteLine($"Peer: {session.Key.PublicKeyBase64}");
+            Console.WriteLine($"Peer: {session.Key.PublicKeyBase64} {session.Peer == null}");
 
             return true;
         }
