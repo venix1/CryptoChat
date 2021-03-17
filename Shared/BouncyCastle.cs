@@ -9,28 +9,23 @@ using Org.BouncyCastle.Security;
 using Rfc7748 = Org.BouncyCastle.Math.EC.Rfc7748;
 using Rfc8032 = Org.BouncyCastle.Math.EC.Rfc8032;
 
-namespace CryptoChat.Shared
-{
+namespace CryptoChat.Shared {
 
-    public static class BouncyCastle
-    {
+    public static class BouncyCastle {
 
         public static readonly SecureRandom SecureRandom;
 
-        static BouncyCastle()
-        {
+        static BouncyCastle() {
             SecureRandom = new Org.BouncyCastle.Security.SecureRandom();
         }
-        static public byte[] AesCrypt(bool encrypt, byte[] aesKey, byte[] aesIV, byte[] payload)
-        {
+        static public byte[] AesCrypt(bool encrypt, byte[] aesKey, byte[] aesIV, byte[] payload) {
             KeyParameter key = ParameterUtilities.CreateKeyParameter("AES", aesKey);
             IBufferedCipher cipher = CipherUtilities.GetCipher("AES/CBC/PKCS7PADDING");
             cipher.Init(encrypt, new ParametersWithIV(key, aesIV));
             return cipher.DoFinal(payload);
         }
 
-        static public byte[] HmacSha256(byte[] key, byte[] data)
-        {
+        static public byte[] HmacSha256(byte[] key, byte[] data) {
             IMac hmac = MacUtilities.GetMac("HMac-SHA256");
             hmac.Init(new KeyParameter(key));
             hmac.Reset();
@@ -38,8 +33,7 @@ namespace CryptoChat.Shared
             return MacUtilities.DoFinal(hmac);
         }
 
-        static public byte[] Sha256Sum(byte[] data)
-        {
+        static public byte[] Sha256Sum(byte[] data) {
             IDigest hash = new Sha256Digest();
             hash.BlockUpdate(data, 0, data.Length);
 
@@ -49,13 +43,12 @@ namespace CryptoChat.Shared
         }
     }
 
-    public class X25519 : IEquatable<X25519>
-    {
+    public class X25519 : IEquatable<X25519> {
         public byte[] PrivateKey { get; set; }
         public byte[] PublicKey { get; set; }
+        public string PublicKeyBase64 => Convert.ToBase64String(PublicKey);
 
-        public X25519()
-        {
+        public X25519() {
             PrivateKey = new byte[32];
             PublicKey = new byte[32];
 
@@ -64,19 +57,16 @@ namespace CryptoChat.Shared
             Rfc7748.X25519.ScalarMultBase(PrivateKey, 0, PublicKey, 0);
         }
 
-        public X25519(byte[] privateKey, byte[] publicKey)
-        {
+        public X25519(byte[] privateKey, byte[] publicKey) {
             PrivateKey = privateKey;
             PublicKey = publicKey;
         }
 
-        public (byte[], byte[]) ComputeSharedSecret(X25519 publicKey)
-        {
+        public (byte[], byte[]) ComputeSharedSecret(X25519 publicKey) {
             return ComputeSharedSecret(publicKey.PublicKey);
         }
 
-        public (byte[], byte[]) ComputeSharedSecret(byte[] publicKey)
-        {
+        public (byte[], byte[]) ComputeSharedSecret(byte[] publicKey) {
             byte[] secret = new byte[64]; // aes + hmac
             byte[] aesKey = new byte[32];
             byte[] hmacKey = new byte[32];
@@ -86,29 +76,25 @@ namespace CryptoChat.Shared
             return (aesKey, hmacKey);
         }
 
-        public bool Equals(X25519 key)
-        {
-                var p1 = BitConverter.ToString(PublicKey);
-                var p2 = BitConverter.ToString(key.PublicKey);
+        public bool Equals(X25519 key) {
+            var p1 = BitConverter.ToString(PublicKey);
+            var p2 = BitConverter.ToString(key.PublicKey);
             Console.WriteLine("X25519=: {0}\n  {1}\n  {2}.", PublicKey.SequenceEqual(key.PublicKey), p1, p2);
 
             return PublicKey.SequenceEqual(key.PublicKey);
 
         }
 
-        public override int GetHashCode()
-        {
+        public override int GetHashCode() {
             return (PublicKey[0] | PublicKey[1] << 8 | PublicKey[2] << 16 | PublicKey[3] << 24);
         }
 
-        public override bool Equals(object obj)
-        {
+        public override bool Equals(object obj) {
             return Equals(obj as X25519);
         }
     }
 
-    public class Ed25519 : IEquatable<Ed25519>
-    {
+    public class Ed25519 : IEquatable<Ed25519> {
         public static readonly int PrivateKeySize = Rfc8032.Ed25519.SecretKeySize;
         public static readonly int PublicKeySize = Rfc8032.Ed25519.PublicKeySize;
 
@@ -116,20 +102,17 @@ namespace CryptoChat.Shared
         public string PublicKeyBase64 => Convert.ToBase64String(PublicKey);
         public byte[] PrivateKey { get; set; }
 
-        static Ed25519()
-        {
+        static Ed25519() {
             Rfc8032.Ed25519.Precompute();
         }
 
 
-        private void Initialize()
-        {
+        private void Initialize() {
             PrivateKey = new byte[Rfc8032.Ed25519.SecretKeySize];
             PublicKey = new byte[Rfc8032.Ed25519.PublicKeySize];
         }
 
-        public Ed25519()
-        {
+        public Ed25519() {
             Initialize();
 
             BouncyCastle.SecureRandom.NextBytes(PrivateKey);
@@ -137,8 +120,7 @@ namespace CryptoChat.Shared
             Rfc8032.Ed25519.GeneratePublicKey(PrivateKey, 0, PublicKey, 0);
         }
 
-        public Ed25519(byte[] privateKey)
-        {
+        public Ed25519(byte[] privateKey) {
             Initialize();
 
             Array.Copy(privateKey, PrivateKey, privateKey.Length);
@@ -146,37 +128,30 @@ namespace CryptoChat.Shared
             Rfc8032.Ed25519.GeneratePublicKey(PrivateKey, 0, PublicKey, 0);
         }
 
-        public Ed25519(byte[] privateKey, byte[] publicKey)
-        {
+        public Ed25519(byte[] privateKey, byte[] publicKey) {
             Initialize();
 
-            if (privateKey == null && publicKey == null)
-            {
+            if (privateKey == null && publicKey == null) {
                 throw new Exception("Must have key data");
             }
 
-            if (privateKey == null)
-            {
+            if (privateKey == null) {
                 PrivateKey = null;
             }
-            else
-            {
+            else {
                 privateKey.CopyTo(PrivateKey, 0);
             }
 
-            if (publicKey == null)
-            {
+            if (publicKey == null) {
                 Rfc8032.Ed25519.GeneratePublicKey(PrivateKey, 0, PublicKey, 0);
             }
-            else
-            {
+            else {
                 // Console.WriteLine($"{publicKey.Length} {PublicKey.Length}");
                 publicKey.CopyTo(PublicKey, 0);
             }
         }
 
-        public byte[] Sign(byte[] data, int offset, int length)
-        {
+        public byte[] Sign(byte[] data, int offset, int length) {
             // Console.WriteLine($"Ed25519.Sign: {offset}, {length}");
             var signature = new byte[Rfc8032.Ed25519.SignatureSize];
 
@@ -185,38 +160,32 @@ namespace CryptoChat.Shared
             return signature;
         }
 
-        public bool Verify(byte[] sig, byte[] data)
-        {
+        public bool Verify(byte[] sig, byte[] data) {
             return Verify(sig, 0, data, 0, data.Length);
         }
 
-        public bool Verify(byte[] sig, int sigOffset, byte[] data, int dataOffset, int dataLength)
-        {
+        public bool Verify(byte[] sig, int sigOffset, byte[] data, int dataOffset, int dataLength) {
             return Rfc8032.Ed25519.Verify(sig, sigOffset, PublicKey, 0, data, dataOffset, dataLength);
         }
 
-        public byte[] Export()
-        {
+        public byte[] Export() {
             var copy = new byte[PublicKey.Length];
             PublicKey.CopyTo(copy, 0);
             return copy;
         }
 
-        public bool Equals(Ed25519 key)
-        {
+        public bool Equals(Ed25519 key) {
             Console.WriteLine("Ed25519=: {0}", PublicKey.SequenceEqual(key.PublicKey));
 
             return PublicKey.SequenceEqual(key.PublicKey);
 
         }
 
-        public override int GetHashCode()
-        {
+        public override int GetHashCode() {
             return (PublicKey[0] | PublicKey[1] << 8 | PublicKey[2] << 16 | PublicKey[3] << 24);
         }
 
-        public override bool Equals(object obj)
-        {
+        public override bool Equals(object obj) {
             return Equals(obj as Ed25519);
         }
     }
