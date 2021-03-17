@@ -1,0 +1,45 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: crypto-chat
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port: 
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - otr.ji.lc
+    tls:
+      httpsRedirect: true
+  - port: 
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - otr.ji.lc
+    tls:
+      mode: SIMPLE
+      serverCertificate: /etc/istio/ingressgateway-certs/origin-jilc.crt
+      privateKey: /etc/istio/ingressgateway-certs/origin-jilc.key
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: crypto-chat
+spec:
+  hosts:
+  - otr.ji.lc
+  gateways:
+  - crypto-chat
+  http:
+  - match:
+    - uri: 
+        prefix: /
+    route:
+    - destination:
+        host: crypto-chat.default.svc.cluster.local
+
